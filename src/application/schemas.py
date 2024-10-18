@@ -60,4 +60,4 @@ class User(BaseId, BaseName):
 
 
 class Users(BaseResult):
-    user: User
+    user: User | None

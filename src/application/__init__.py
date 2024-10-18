@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 
+from .dependencies import Lifespan
 from .routes import medias, tweets, users
 from .utils import update_schema_name
 
 
-def create_app() -> FastAPI:
-    app: FastAPI = FastAPI(root_path="/api")
+def create_app(*, drop_all: bool = False) -> FastAPI:
+    lifespan = Lifespan(drop_all=drop_all)
+    app: FastAPI = FastAPI(root_path="/api", lifespan=lifespan, title="TweetsApi")
 
     app.include_router(tweets.route)
     app.include_router(medias.route)
