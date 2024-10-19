@@ -1,0 +1,28 @@
+[tool.black]
+line-length = 79
+extend-exclude = "alembic"
+
+[tool.isort]
+profile = "black"
+skip = [
+    ".git", "__pycache__",
+    ".venv", "alembic"
+]
+line_length = 79
+
+[tool.flake8]
+exclude = [
+    ".git", "__pycache__",
+    ".venv", "alembic"
+]
+max-line-length = 79
+extend-select = "B950"
+extend-ignore = ["E203", "E501", "E701", "D107"]
+per-file-ignores = "__init__.py:F401,F403"
+
+[tool.pytest.ini_options]
+filterwarnings = "ignore::DeprecationWarning"
+env = "D:DATABASE_URL=postgresql+psycopg_async://admin:admin@localhost/postgres"
+
+[tool.mypy]
+plugins = "sqlalchemy.ext.mypy.plugin"

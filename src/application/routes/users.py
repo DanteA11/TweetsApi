@@ -1,8 +1,10 @@
+"""Реализация /users."""
+
 from fastapi import APIRouter
 
 from .. import dependencies as dep
 from .. import schemas
-from ..models.crud import get_full_user_info
+from ..models.crud import add_subscribe, drop_subscribe, get_full_user_info
 
 route = APIRouter(prefix="/users", tags=["users"])
 
@@ -11,12 +13,15 @@ route = APIRouter(prefix="/users", tags=["users"])
 async def get_me(user: dep.ApiKey, async_session: dep.async_session):
     """Пользователь запрашивает информацию о своем профиле."""
     async with async_session() as session:
-        result = await get_full_user_info(user.id, session, user=user)
-        return {"result": True, "user": result}
+        user_data = await get_full_user_info(user.id, session, user=user)  # type: ignore
+        result = {"result": True, "user": user_data}
+        return result
 
 
 @route.get("/{id}", response_model=schemas.Users, name="Профиль по ID")
-async def get_user_by_id(id: int, user: dep.ApiKey, async_session: dep.async_session):
+async def get_user_by_id(
+    id: int, user: dep.ApiKey, async_session: dep.async_session
+):
     """Пользователь запрашивает информацию о профиле другого пользователя по ID."""
     async with async_session() as session:
         user_data = await get_full_user_info(id, session)
@@ -27,10 +32,20 @@ async def get_user_by_id(id: int, user: dep.ApiKey, async_session: dep.async_ses
 
 
 @route.post("/{id}/follow", response_model=schemas.Result, name="Подписаться")
-async def subscribe_to_user(id: int, user: dep.ApiKey):
+async def subscribe_to_user(
+    id: int, user: dep.ApiKey, async_session: dep.async_session
+):
     """Пользователь подписывается на другого пользователя."""
+    async with async_session() as session:
+        result = await add_subscribe(user.id, id, session)  # type: ignore
+    return {"result": result}
 
 
 @route.delete("/{id}/follow", response_model=schemas.Result, name="Отписаться")
-async def unsubscribe_to_user(id: int, user: dep.ApiKey):
+async def unsubscribe_to_user(
+    id: int, user: dep.ApiKey, async_session: dep.async_session
+):
     """Пользователь отписывается от другого пользователя."""
+    async with async_session() as session:
+        result = await drop_subscribe(user.id, id, session)  # type: ignore
+    return {"result": result}

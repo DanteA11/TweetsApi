@@ -4,8 +4,21 @@ from sqlalchemy.orm import relationship
 
 from .database import Base
 
+__all__ = [
+    "Base",
+    "ApiKey",
+    "User",
+    "Subscribe",
+    "Like",
+    "Tweet",
+    "Media",
+    "TweetMedia",
+]
+
 
 class ApiKey(Base):
+    """Ключ для авторизации пользователя."""
+
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True)
@@ -15,6 +28,8 @@ class ApiKey(Base):
 
 
 class User(Base):
+    """Пользователь."""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
@@ -27,6 +42,8 @@ class User(Base):
 
 
 class Subscribe(Base):
+    """Подписки."""
+
     __tablename__ = "subscribes"
 
     follower_id = Column(Integer, primary_key=True)
@@ -34,6 +51,8 @@ class Subscribe(Base):
 
 
 class Like(Base):
+    """Отметки 'Нравится'."""
+
     __tablename__ = "likes"
 
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
@@ -44,6 +63,8 @@ class Like(Base):
 
 
 class Tweet(Base):
+    """Твиты."""
+
     __tablename__ = "tweets"
 
     id = Column(Integer, primary_key=True)
@@ -57,6 +78,8 @@ class Tweet(Base):
 
 
 class Media(Base):
+    """Медиафайлы."""
+
     __tablename__ = "medias"
 
     id = Column(Integer, primary_key=True)
@@ -69,6 +92,8 @@ class Media(Base):
 
 
 class TweetMedia(Base):
+    """Вспомогательная таблица для Media и Tweet."""
+
     __tablename__ = "tweet_medias"
 
     media_id = Column(Integer, ForeignKey("medias.id"), primary_key=True)
@@ -77,4 +102,6 @@ class TweetMedia(Base):
     )
 
     tweet = relationship("Tweet", back_populates="_tweet_media", uselist=False)
-    media = relationship("Media", back_populates="_tweet_media", cascade="delete")
+    media = relationship(
+        "Media", back_populates="_tweet_media", cascade="delete"
+    )

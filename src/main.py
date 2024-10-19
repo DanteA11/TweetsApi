@@ -1,3 +1,5 @@
+"""Файл с приложением."""
+
 from application import create_app
 
 app = create_app()
