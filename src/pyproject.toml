@@ -26,3 +26,4 @@ env = "D:DATABASE_URL=postgresql+psycopg_async://admin:admin@localhost/postgres"
 
 [tool.mypy]
 plugins = "sqlalchemy.ext.mypy.plugin"
+exclude = "tests"

@@ -37,7 +37,7 @@ async def get_full_user_info(
     {'id': int, 'name': str, 'followers': [User], 'following': [User]}.
     Если пользователь не найден и не передан как параметр User, возвращает None.
     """
-    user = user or await _get_by_id(user_id, User, async_session)
+    user = user or await get_by_id(user_id, User, async_session)
     if not user:
         return
     user_data = user.to_dict()
@@ -60,7 +60,7 @@ async def get_full_user_info(
     return user_data
 
 
-async def _get_by_id(id_: int, model: type[Base], async_session: AsyncSession):
+async def get_by_id(id_: int, model: type[Base], async_session: AsyncSession):
     """
     Запрашивает модель из базы данных по id.
 
@@ -89,7 +89,7 @@ async def add_subscribe(
     """
     if user_id == author_id:
         return False
-    user = await _get_by_id(author_id, User, async_session)
+    user = await get_by_id(author_id, User, async_session)
     if not user:
         return False
     subscribe = Subscribe(follower_id=user_id, author_id=author_id)
@@ -117,7 +117,7 @@ async def drop_subscribe(
     """
     if user_id == author_id:
         return False
-    user = await _get_by_id(author_id, User, async_session)
+    user = await get_by_id(author_id, User, async_session)
     if not user:
         return False
     query = delete(Subscribe).filter(

@@ -85,7 +85,7 @@ class Lifespan:
 
     def __init__(self, *, drop_all: bool = False):
         async_engine_getter = AsyncEngineGetter()
-        engine = async_engine_getter()
+        engine = async_engine_getter.engine
         self.start_kwargs = self.stop_kwargs = {
             "engine": engine,
             "drop_all": drop_all,
@@ -158,7 +158,9 @@ class Lifespan:
         self._kwargs_for_funcs["stop"] = kwargs
 
 
-def get_async_session(engine: async_engine):
+def get_async_session_maker(
+    engine: Annotated[AsyncEngine, Depends(AsyncEngineGetter())]
+) -> async_sessionmaker[AsyncSession]:
     """
     Функция для получения конструктора асинхронной сессии.
 
@@ -166,9 +168,25 @@ def get_async_session(engine: async_engine):
 
     :param engine: Асинхронный движок.
 
-    :return: Объект конструктора асинхронной сессии.
+    :return: Конструктор асинхронной сессии.
     """
     return get_session(engine)
+
+
+async def get_async_session(
+    session_maker: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_async_session_maker)
+    ]
+):
+    """
+    Функция-генератор для получения асинхронной сессии.
+
+    :param session_maker: Асинхронный движок.
+
+    :return: Асинхронная сессия
+    """
+    async with session_maker() as session:
+        yield session
 
 
 async def get_user_by_api_key(
@@ -184,20 +202,21 @@ async def get_user_by_api_key(
     :return: Пользователь
     :raise HTTPException: Выбрасывает, если пользователь не найден.
     """
-    async with a_session() as session:
-        user = await crud.get_user_by_api_key(
-            api_key=api_key, async_session=session
+    user = await crud.get_user_by_api_key(
+        api_key=api_key, async_session=a_session
+    )
+    if not user:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "loc": ["header", "api-key"],
+                "input": api_key,
+                "msg": "api-key header invalid",
+                "type": "assertion_error",
+            },
         )
-        if not user:
-            raise HTTPException(
-                status_code=400, detail="api-key header invalid"
-            )
-        return user
+    return user
 
 
-engine_getter = AsyncEngineGetter()
+async_session = Annotated[AsyncSession, Depends(get_async_session)]
 ApiKey = Annotated[User, Depends(get_user_by_api_key)]
-async_engine = Annotated[AsyncEngine, Depends(engine_getter)]
-async_session = Annotated[
-    async_sessionmaker[AsyncSession], Depends(get_async_session)
-]
