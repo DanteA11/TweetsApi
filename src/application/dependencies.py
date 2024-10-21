@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Awaitable, Callable
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -23,6 +23,8 @@ from .models.database import get_async_session as get_session
 from .models.database import start_conn, stop_conn
 from .settings import get_settings
 from .utils import MetaSingleton
+
+SETTINGS = get_settings()
 
 
 class AsyncEngineGetter(metaclass=MetaSingleton):
@@ -41,7 +43,7 @@ class AsyncEngineGetter(metaclass=MetaSingleton):
     """
 
     def __init__(self, settings: BaseModel | None = None):
-        settings = settings or get_settings()
+        settings = settings or SETTINGS
         self.__engine: AsyncEngine | None = None
         self.database_url = settings.database_url  # type: ignore
 
@@ -208,15 +210,53 @@ async def get_user_by_api_key(
     if not user:
         raise HTTPException(
             status_code=422,
-            detail={
-                "loc": ["header", "api-key"],
-                "input": api_key,
-                "msg": "api-key header invalid",
-                "type": "assertion_error",
-            },
+            detail=[
+                {
+                    "loc": ["header", "api-key"],
+                    "input": api_key,
+                    "msg": "api-key header invalid",
+                    "type": "assertion_error",
+                }
+            ],
         )
     return user
 
 
+async def check_file(file: UploadFile):
+    """
+    Функция проверяет файл на соответствие типа и размера.
+
+    :param file: Файл.
+    :return: Файл.
+    :raise HTTPException: Выбрасывает, если файл не прошел валидацию.
+    """
+    details = []
+    detail: dict[str, list | str] = {
+        "loc": ["body", "file"],
+    }
+    max_size = SETTINGS.max_image_size
+    if file.size > max_size:
+        res = detail.copy()
+        res["msg"] = (
+            f"File size ({file.size}) is "
+            f"larger than the maximum file size ({max_size})"
+        )
+        res["type"] = "value_error"
+        details.append(res)
+    supported_types = SETTINGS.media_types
+    if file.content_type not in SETTINGS.media_types:
+        res = detail.copy()
+        res["msg"] = (
+            f"Type {file.content_type} "
+            f"not in supported types {supported_types}"
+        )
+        res["type"] = "type_error"
+        details.append(res)
+    if details:
+        raise HTTPException(status_code=422, detail=details)
+    return file
+
+
 async_session = Annotated[AsyncSession, Depends(get_async_session)]
 ApiKey = Annotated[User, Depends(get_user_by_api_key)]
+file = Annotated[UploadFile, Depends(check_file)]

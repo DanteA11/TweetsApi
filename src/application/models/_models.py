@@ -1,5 +1,4 @@
 from sqlalchemy import Column, ForeignKey, Integer, String
-from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -12,7 +11,6 @@ __all__ = [
     "Like",
     "Tweet",
     "Media",
-    "TweetMedia",
 ]
 
 
@@ -73,8 +71,7 @@ class Tweet(Base):
 
     like = relationship("Like", back_populates="tweet")
 
-    _tweet_media = relationship("TweetMedia", back_populates="tweet")
-    media = association_proxy("_tweet_media", "media")
+    media = relationship("Media", back_populates="tweet")
 
 
 class Media(Base):
@@ -83,25 +80,9 @@ class Media(Base):
     __tablename__ = "medias"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tweet_id = Column(Integer, ForeignKey("tweets.id", ondelete="CASCADE"))
 
     user = relationship("User", back_populates="media")
-    _tweet_media = relationship("TweetMedia", back_populates="media")
-    tweet = association_proxy("_tweet_media", "tweet")
-
-
-class TweetMedia(Base):
-    """Вспомогательная таблица для Media и Tweet."""
-
-    __tablename__ = "tweet_medias"
-
-    media_id = Column(Integer, ForeignKey("medias.id"), primary_key=True)
-    tweet_id = Column(
-        Integer, ForeignKey("tweets.id", ondelete="CASCADE"), primary_key=True
-    )
-
-    tweet = relationship("Tweet", back_populates="_tweet_media", uselist=False)
-    media = relationship(
-        "Media", back_populates="_tweet_media", cascade="delete"
-    )
+    tweet = relationship("Tweet", back_populates="media", uselist=False)

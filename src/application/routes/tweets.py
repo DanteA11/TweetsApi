@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from .. import dependencies as dep
 from .. import schemas
+from ..models.crud import add_tweet
 
 route = APIRouter(prefix="/tweets", tags=["tweets"])
 
@@ -31,8 +32,17 @@ async def get_tweets(user: dep.ApiKey):
 
 
 @route.post("", response_model=schemas.TweetResult, name="Создать твит")
-async def create_tweet(tweet: schemas.TweetIn, user: dep.ApiKey):
+async def create_tweet(
+    tweet: schemas.TweetIn, user: dep.ApiKey, async_session: dep.async_session
+):
     """Пользователь создает новый твит."""
+    tweet_id = await add_tweet(
+        user_id=user.id,
+        tweet_data=tweet.tweet_data,
+        tweet_media_ids=tweet.tweet_media_ids,
+        async_session=async_session,
+    )
+    return {"result": True, "tweet_id": tweet_id}
 
 
 @route.delete("/{id}", response_model=schemas.Result, name="Удалить твит")

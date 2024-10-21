@@ -1,10 +1,15 @@
 """Функции для взаимодействия с базой данных."""
 
-from sqlalchemy import delete, select
+import aiofiles
+from fastapi import UploadFile
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ._models import Base, Subscribe, User
+from ..settings import get_settings
+from ._models import Base, Media, Subscribe, Tweet, User
+
+SETTINGS = get_settings()
 
 
 async def get_user_by_api_key(api_key: str, async_session: AsyncSession):
@@ -126,3 +131,67 @@ async def drop_subscribe(
     await async_session.execute(query)
     await async_session.commit()
     return True
+
+
+async def add_media(
+    user_id: int, media: UploadFile, async_session: AsyncSession
+):
+    """
+    Функция сохраняет медиафайл.
+
+    :param user_id: ID пользователя
+    :param media: Файл.
+    :param async_session:  Экземпляр сессии.
+
+    :return: Возвращает медиа ID.
+    """
+    _, file_type = media.content_type.split("/")
+    media_ = Media(user_id=user_id, file_type=file_type)
+    async_session.add(media_)
+    await async_session.commit()
+    media_id = await media_.awaitable_attrs.id
+    path = SETTINGS.media_path
+
+    async with aiofiles.open(path.format(media_id, file_type), "wb") as file:
+        res = await media.read()
+        await file.write(res)
+    return media_id
+
+
+async def add_tweet(
+    user_id: int,
+    tweet_data: str,
+    tweet_media_ids: list[int],
+    async_session: AsyncSession,
+):
+    """
+    Функция добавляет новый твит.
+
+    Переда добавлением информации о медиафайлах в твит,
+     проверяет, чтобы id пользователя равнялось
+    id автора медиафайла и чтобы медиафайл не участвовал в других твитах.
+
+    :param user_id: ID пользователя.
+    :param tweet_data: Текст твита.
+    :param tweet_media_ids: ID медиафайлов.
+    :param async_session: Экземпляр сессии.
+
+    :return: ID твита.
+    """
+    tweet = Tweet(content=tweet_data, author_id=user_id)
+    async_session.add(tweet)
+    await async_session.flush()
+
+    tweet_id = await tweet.awaitable_attrs.id
+    query = (
+        update(Media)
+        .filter(
+            Media.user_id == user_id,
+            Media.id.in_(tweet_media_ids),
+            Media.tweet_id.is_(None),
+        )
+        .values(tweet_id=tweet_id)
+    )
+    await async_session.execute(query)
+    await async_session.commit()
+    return tweet_id

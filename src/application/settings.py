@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     """
 
     database_url: str
+    max_image_size: int
+    media_path: str
+    media_types: tuple[str, ...] = ("image/png", "image/jpg", "image/jpeg")
 
     model_config = SettingsConfigDict(env_file=".env")
 
