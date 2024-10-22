@@ -243,15 +243,20 @@ async def check_file(file: UploadFile):
         )
         res["type"] = "value_error"
         details.append(res)
-    supported_types = SETTINGS.media_types
-    if file.content_type not in SETTINGS.media_types:
+
+    supported_extensions = SETTINGS.media_extensions
+    *others, extension = file.filename.split(".")
+    if not others:
+        extension = ''
+    if not extension or extension.lower() not in supported_extensions:
         res = detail.copy()
         res["msg"] = (
-            f"Type {file.content_type} "
-            f"not in supported types {supported_types}"
+            f"Extension '{extension}' "
+            f"not in supported {supported_extensions}"
         )
         res["type"] = "type_error"
         details.append(res)
+
     if details:
         raise HTTPException(status_code=422, detail=details)
     return file

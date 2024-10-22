@@ -1,6 +1,7 @@
 """Функции для взаимодействия с базой данных."""
 
 import aiofiles
+import aiofiles.os
 from fastapi import UploadFile
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
@@ -117,8 +118,7 @@ async def drop_subscribe(
     :param author_id: ID пользователя, от которого отписываются.
     :param async_session: Экземпляр сессии.
 
-    :return: Если автор сам пользователь или не существует,
-     возвращает False, иначе True.
+    :return: Если подписка удалена, возвращает True, иначе - False.
     """
     if user_id == author_id:
         return False
@@ -128,9 +128,9 @@ async def drop_subscribe(
     query = delete(Subscribe).filter(
         Subscribe.follower_id == user_id, Subscribe.author_id == author_id
     )
-    await async_session.execute(query)
+    res = await async_session.execute(query)
     await async_session.commit()
-    return True
+    return res.rowcount != 0
 
 
 async def add_media(
@@ -145,7 +145,7 @@ async def add_media(
 
     :return: Возвращает медиа ID.
     """
-    _, file_type = media.content_type.split("/")
+    _, file_type = media.filename.split(".")
     media_ = Media(user_id=user_id, file_type=file_type)
     async_session.add(media_)
     await async_session.commit()
@@ -195,3 +195,33 @@ async def add_tweet(
     await async_session.execute(query)
     await async_session.commit()
     return tweet_id
+
+
+async def remove_tweet(
+    user_id: int,
+    tweet_id: int,
+    async_session: AsyncSession,
+):
+    """
+    Удаляет твит и связанные медиафайлы.
+
+    :param user_id: ID пользователя.
+    :param tweet_id: ID твита.
+    :param async_session: Экземпляр сессии.
+    :return: Если твит найден и удален, возвращает True, иначе False
+    """
+    query_medias = select(Media).filter(Media.tweet_id == tweet_id)
+
+    medias_res = await async_session.execute(query_medias)
+    medias = medias_res.scalars().all()
+    path = SETTINGS.media_path
+    for media in medias:
+        await aiofiles.os.remove(path.format(media.id, media.file_type))
+
+    query = delete(Tweet).filter(
+        Tweet.id == tweet_id, Tweet.author_id == user_id
+    )
+    res = await async_session.execute(query)
+    await async_session.commit()
+
+    return res.rowcount != 0
