@@ -29,7 +29,7 @@ async def test_get_users_without_api_key(async_client, users_url, path):
 @pytest.mark.anyio
 async def test_get_users_me(async_client, users_url, session):
     user = await UserFactory.create()
-    api_key_obj = await get_by_id(user.key_id, ApiKey, session)
+    api_key_obj = await user.awaitable_attrs.api_key
     response = await async_client.get(
         f"{users_url}/me", headers={"api-key": api_key_obj.key}
     )
@@ -41,7 +41,7 @@ async def test_get_users_me(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_get_users_by_id(async_client, users_url, session):
     user = await UserFactory.create()
-    api_key_obj = await get_by_id(user.key_id, ApiKey, session)
+    api_key_obj = await user.awaitable_attrs.api_key
     user_id = user.id
     response = await async_client.get(
         f"{users_url}/{user_id}", headers={"api-key": api_key_obj.key}
@@ -54,7 +54,7 @@ async def test_get_users_by_id(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_me_get_other(async_client, users_url, session):
     me = await UserFactory.create()
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
     response = await async_client.get(
@@ -67,9 +67,9 @@ async def test_me_get_other(async_client, users_url, session):
 
 
 @pytest.mark.anyio
-async def test_subscribeto_yourself(async_client, users_url, session):
+async def test_subscribe_to_yourself(async_client, users_url, session):
     me = await get_by_id(1, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     response = await async_client.post(
         f"{users_url}/{me.id}/follow", headers={"api-key": key}
@@ -88,7 +88,7 @@ async def test_subscribeto_yourself(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_subscribe_to_other(async_client, users_url, session):
     me = await get_by_id(1, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
     author_id = me_id + 1
@@ -109,7 +109,7 @@ async def test_subscribe_to_other(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_subscribe_to_other_again(async_client, users_url, session):
     me = await get_by_id(2, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
     author_id = me_id + 1
@@ -148,7 +148,7 @@ async def test_subscribe_to_non_existent_user(
     async_client, users_url, session
 ):
     me = await get_by_id(1, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     author_id = 10000
     response = await async_client.post(
@@ -168,7 +168,7 @@ async def test_subscribe_to_non_existent_user(
 @pytest.mark.anyio
 async def test_unsubscribe_from_yourself(async_client, users_url, session):
     me = await get_by_id(1, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     response = await async_client.delete(
         f"{users_url}/{me.id}/follow", headers={"api-key": key}
@@ -181,7 +181,7 @@ async def test_unsubscribe_from_yourself(async_client, users_url, session):
 async def test_unsubscribe_from_other(async_client, users_url, session):
     me = await get_by_id(1, User, session)
     author = await UserFactory.create()
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
     author_id = author.id
@@ -215,7 +215,7 @@ async def test_unsubscribe_from_other(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_followers_field_users_me(async_client, users_url, session):
     me = await get_by_id(2, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
 
@@ -242,7 +242,7 @@ async def test_followers_field_users_me(async_client, users_url, session):
 @pytest.mark.anyio
 async def test_following_field_users_me(async_client, users_url, session):
     me = await get_by_id(2, User, session)
-    api_key_obj = await get_by_id(me.key_id, ApiKey, session)
+    api_key_obj = await me.awaitable_attrs.api_key
     key = api_key_obj.key
     me_id = me.id
 

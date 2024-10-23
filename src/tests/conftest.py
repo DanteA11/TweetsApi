@@ -1,6 +1,7 @@
 import asyncio
 from typing import Generator
 
+import aiofiles
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -63,3 +64,13 @@ def api_url():
 @pytest.fixture(scope="module")
 def users_url(api_url):
     return api_url.format(uri="/users")
+
+
+@pytest.fixture(scope="module")
+def medias_url(api_url):
+    return api_url.format(uri="/medias")
+
+
+@pytest.fixture(scope="module")
+def tweets_url(api_url):
+    return api_url.format(uri="/tweets")

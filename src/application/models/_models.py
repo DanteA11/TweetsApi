@@ -35,8 +35,9 @@ class User(Base):
     key_id = Column(Integer, ForeignKey("api_keys.id"))
 
     api_key = relationship("ApiKey", back_populates="user", uselist=False)
-    media = relationship("Media", back_populates="user")
-    like = relationship("Like", back_populates="user")
+    medias = relationship("Media", back_populates="user")
+    likes = relationship("Like", back_populates="user")
+    tweets = relationship("Tweet", back_populates="author")
 
 
 class Subscribe(Base):
@@ -44,8 +45,8 @@ class Subscribe(Base):
 
     __tablename__ = "subscribes"
 
-    follower_id = Column(Integer, primary_key=True)
-    author_id = Column(Integer, primary_key=True)
+    follower_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    author_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
 
 
 class Like(Base):
@@ -54,10 +55,12 @@ class Like(Base):
     __tablename__ = "likes"
 
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    tweet_id = Column(Integer, ForeignKey("tweets.id"), primary_key=True)
+    tweet_id = Column(
+        Integer, ForeignKey("tweets.id", ondelete="CASCADE"), primary_key=True
+    )
 
-    user = relationship("User", back_populates="like")
-    tweet = relationship("Tweet", back_populates="like")
+    user = relationship("User", back_populates="likes", uselist=False)
+    tweet = relationship("Tweet", back_populates="likes", uselist=False)
 
 
 class Tweet(Base):
@@ -69,9 +72,9 @@ class Tweet(Base):
     content = Column(String, nullable=False)
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    like = relationship("Like", back_populates="tweet")
-
-    media = relationship("Media", back_populates="tweet")
+    likes = relationship("Like", back_populates="tweet")
+    author = relationship("User", back_populates="tweets", uselist=False)
+    medias = relationship("Media", back_populates="tweet")
 
 
 class Media(Base):
@@ -84,5 +87,5 @@ class Media(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     tweet_id = Column(Integer, ForeignKey("tweets.id", ondelete="CASCADE"))
 
-    user = relationship("User", back_populates="media")
-    tweet = relationship("Tweet", back_populates="media", uselist=False)
+    user = relationship("User", back_populates="medias", uselist=False)
+    tweet = relationship("Tweet", back_populates="medias", uselist=False)

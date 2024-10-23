@@ -247,7 +247,7 @@ async def check_file(file: UploadFile):
     supported_extensions = SETTINGS.media_extensions
     *others, extension = file.filename.split(".")
     if not others:
-        extension = ''
+        extension = ""
     if not extension or extension.lower() not in supported_extensions:
         res = detail.copy()
         res["msg"] = (

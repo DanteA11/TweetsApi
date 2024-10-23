@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..settings import get_settings
-from ._models import Base, Media, Subscribe, Tweet, User
+from ._models import Base, Like, Media, Subscribe, Tweet, User
 
 SETTINGS = get_settings()
 
@@ -95,9 +95,6 @@ async def add_subscribe(
     """
     if user_id == author_id:
         return False
-    user = await get_by_id(author_id, User, async_session)
-    if not user:
-        return False
     subscribe = Subscribe(follower_id=user_id, author_id=author_id)
     async_session.add(subscribe)
     try:
@@ -121,9 +118,6 @@ async def drop_subscribe(
     :return: Если подписка удалена, возвращает True, иначе - False.
     """
     if user_id == author_id:
-        return False
-    user = await get_by_id(author_id, User, async_session)
-    if not user:
         return False
     query = delete(Subscribe).filter(
         Subscribe.follower_id == user_id, Subscribe.author_id == author_id
@@ -176,13 +170,18 @@ async def add_tweet(
     :param tweet_media_ids: ID медиафайлов.
     :param async_session: Экземпляр сессии.
 
-    :return: ID твита.
+    :return: Словарь с ключом result (type bool) и
+    опциональным ключом tweet_id (type int).
     """
     tweet = Tweet(content=tweet_data, author_id=user_id)
     async_session.add(tweet)
     await async_session.flush()
 
     tweet_id = await tweet.awaitable_attrs.id
+    if not tweet_media_ids:
+        await async_session.commit()
+        return {"result": True, "tweet_id": tweet_id}
+
     query = (
         update(Media)
         .filter(
@@ -192,9 +191,13 @@ async def add_tweet(
         )
         .values(tweet_id=tweet_id)
     )
-    await async_session.execute(query)
+    result = await async_session.execute(query)
+    if result.rowcount == 0:
+        await async_session.rollback()
+        return {"result": False}
+
     await async_session.commit()
-    return tweet_id
+    return {"result": True, "tweet_id": tweet_id}
 
 
 async def remove_tweet(
@@ -225,3 +228,86 @@ async def remove_tweet(
     await async_session.commit()
 
     return res.rowcount != 0
+
+
+async def create_like(
+    user_id: int, tweet_id: int, async_session: AsyncSession
+):
+    """
+    Сохраняет информацию о лайке.
+
+    :param user_id: ID пользователя.
+    :param tweet_id: ID твита.
+    :param async_session: Экземпляр сессии.
+
+    :return: True, если лайк поставлен, иначе False.
+    """
+    like = Like(user_id=user_id, tweet_id=tweet_id)
+    async_session.add(like)
+    try:
+        await async_session.commit()
+    except IntegrityError:
+        await async_session.rollback()
+        return False
+    return True
+
+
+async def remove_like(
+    user_id: int, tweet_id: int, async_session: AsyncSession
+):
+    """
+    Удаляет информацию о лайке.
+
+    :param user_id: ID пользователя.
+    :param tweet_id: ID твита.
+    :param async_session: Экземпляр сессии.
+
+    :return: True, если лайк удален, иначе False.
+    """
+    query = delete(Like).filter(
+        Like.user_id == user_id, Like.tweet_id == tweet_id
+    )
+    res = await async_session.execute(query)
+    await async_session.commit()
+    return res.rowcount != 0
+
+
+async def get_tweets_info(
+    user_id: int, base_url: str, async_session: AsyncSession
+):
+    """
+    Возвращает информацию о твитах, на которые подписан пользователь.
+
+    :param user_id: ID пользователя.
+    :param base_url: Базовый URL API.
+    :param async_session: Экземпляр сессии.
+    """
+    tweet_query = (
+        select(Tweet)
+        .join(Subscribe, Tweet.author_id == Subscribe.author_id)
+        .filter(Subscribe.follower_id == user_id)
+    )
+    result_tweets = await async_session.execute(tweet_query)
+    tweets = result_tweets.scalars().all()
+    result = []
+    for tweet in tweets:
+        medias = await tweet.awaitable_attrs.medias
+        res = tweet.to_dict()
+        res["attachments"] = [
+            f"{base_url}/medias/{media.id}.{media.file_type}"
+            for media in medias
+        ]
+        author = await tweet.awaitable_attrs.author
+        res["author"] = author
+        likes = await tweet.awaitable_attrs.likes
+
+        likes_data = []
+        for like in likes:
+            like_data = like.to_dict()
+            user = await like.awaitable_attrs.user
+            like_data["name"] = user.name
+            likes_data.append(like_data)
+
+        res["likes"] = likes_data
+        result.append(res)
+    return result

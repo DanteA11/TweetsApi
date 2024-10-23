@@ -72,7 +72,7 @@ class TweetResult(BaseResult):
     :arg tweet_id: Идентификатор твита.
     """
 
-    tweet_id: int
+    tweet_id: int = -1
 
 
 class TweetIn(BaseModel):
