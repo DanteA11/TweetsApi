@@ -48,7 +48,7 @@ class TweetFactory(AsyncSQLAlchemyFactory):
         model = Tweet
         sqlalchemy_session = session
 
-    content = Faker("text", max_nb_chars=200)
+    content = Faker("text", max_nb_chars=100)
     author = SubFactory(UserFactory)
 
 

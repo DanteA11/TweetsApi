@@ -29,7 +29,7 @@ async def get_tweets(
     try:
         tweets = await get_tweets_info(
             user_id=user.id,
-            base_url=request.base_url,
+            base_url=request.url_for("Загрузить файл"),
             async_session=async_session,
         )
     except Exception as exc:

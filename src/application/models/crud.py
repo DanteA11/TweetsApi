@@ -1,5 +1,7 @@
 """Функции для взаимодействия с базой данных."""
 
+import asyncio
+
 import aiofiles
 import aiofiles.os
 from fastapi import UploadFile
@@ -50,15 +52,18 @@ async def get_full_user_info(
     query_following = (
         select(User)
         .join(Subscribe, User.id == Subscribe.author_id)
-        .filter(User.id != user_id)
+        .filter(Subscribe.follower_id == user_id)
     )
-    following = await async_session.execute(query_following)
     query_followers = (
         select(User)
         .join(Subscribe, User.id == Subscribe.follower_id)
-        .filter(User.id != user_id)
+        .filter(Subscribe.author_id == user_id)
     )
-    followers = await async_session.execute(query_followers)
+
+    following, followers = await asyncio.gather(
+        async_session.execute(query_following),
+        async_session.execute(query_followers),
+    )
 
     user_data["following"] = following.scalars().all()
     user_data["followers"] = followers.scalars().all()
@@ -139,15 +144,15 @@ async def add_media(
 
     :return: Возвращает медиа ID.
     """
+    path = SETTINGS.media_path
     _, file_type = media.filename.split(".")
     media_ = Media(user_id=user_id, file_type=file_type)
     async_session.add(media_)
-    await async_session.commit()
+    _, res = await asyncio.gather(async_session.commit(), media.read())
     media_id = await media_.awaitable_attrs.id
-    path = SETTINGS.media_path
+    res_path = path.format(media_id, file_type)
 
-    async with aiofiles.open(path.format(media_id, file_type), "wb") as file:
-        res = await media.read()
+    async with aiofiles.open(res_path, "wb") as file:
         await file.write(res)
     return media_id
 
@@ -218,15 +223,17 @@ async def remove_tweet(
     medias_res = await async_session.execute(query_medias)
     medias = medias_res.scalars().all()
     path = SETTINGS.media_path
-    for media in medias:
-        await aiofiles.os.remove(path.format(media.id, media.file_type))
-
     query = delete(Tweet).filter(
         Tweet.id == tweet_id, Tweet.author_id == user_id
     )
-    res = await async_session.execute(query)
+    tasks = [async_session.execute(query)]
+    for media in medias:
+        tasks.append(
+            aiofiles.os.remove(path.format(media.id, media.file_type))
+        )
+    results = await asyncio.gather(*tasks)
     await async_session.commit()
-
+    res = results[0]
     return res.rowcount != 0
 
 
@@ -272,7 +279,7 @@ async def remove_like(
     return res.rowcount != 0
 
 
-async def get_tweets_info(
+async def get_tweets_info(  # TODO Исправить реализацию.
     user_id: int, base_url: str, async_session: AsyncSession
 ):
     """
@@ -294,8 +301,7 @@ async def get_tweets_info(
         medias = await tweet.awaitable_attrs.medias
         res = tweet.to_dict()
         res["attachments"] = [
-            f"{base_url}/medias/{media.id}.{media.file_type}"
-            for media in medias
+            f"{base_url}/{media.id}.{media.file_type}" for media in medias
         ]
         author = await tweet.awaitable_attrs.author
         res["author"] = author

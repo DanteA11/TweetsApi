@@ -17,8 +17,13 @@ from application.models.database import start_conn, stop_conn
 
 
 @pytest.fixture(scope="session")
-def anyio_backend():
+def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(scope="session")
+def base_url() -> str:
+    return "http://test"
 
 
 @pytest.fixture(scope="session")
@@ -30,9 +35,9 @@ def app(engine) -> Generator[FastAPI, None, None]:
 
 
 @pytest.fixture(scope="module")
-async def async_client(app):
+async def async_client(app, base_url):
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        transport=ASGITransport(app=app), base_url=base_url
     ) as ac:
         yield ac
 
