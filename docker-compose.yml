@@ -1,0 +1,30 @@
+services:
+
+  db:
+    image: postgres
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+
+  app:
+    build:
+      context: src
+    links:
+      - db
+      - adminer
+    environment:
+      - DATABASE_URL=postgresql+psycopg_async://admin:admin@db/admin
+    stop_signal: SIGKILL
+    restart: always
+    ports:
+      - 8000:80
