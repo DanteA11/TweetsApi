@@ -5,7 +5,6 @@ import pytest
 from sqlalchemy import select
 
 from application.models import ApiKey, Subscribe, User
-from application.models.crud import get_by_id
 
 from .factories import UserFactory
 

@@ -150,7 +150,7 @@ async def add_media(
     async_session.add(media_)
     _, res = await asyncio.gather(async_session.commit(), media.read())
     media_id = await media_.awaitable_attrs.id
-    res_path = path.format(media_id, file_type)
+    res_path = f"{path}/{media_id}.{file_type}"
 
     async with aiofiles.open(res_path, "wb") as file:
         await file.write(res)

@@ -1,7 +1,7 @@
 import asyncio
+import os
 from typing import Generator
 
-import aiofiles
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from application import create_app
+from application import create_app, settings
 from application.dependencies import AsyncEngineGetter, get_async_session_maker
 from application.models.database import start_conn, stop_conn
 
+_media_path = settings.get_settings().media_path
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
@@ -79,3 +80,7 @@ def medias_url(api_url):
 @pytest.fixture(scope="module")
 def tweets_url(api_url):
     return api_url.format(uri="/tweets")
+
+@pytest.fixture
+def media_path():
+    return _media_path
