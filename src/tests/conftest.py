@@ -17,6 +17,7 @@ from application.models.database import start_conn, stop_conn
 
 _media_path = settings.get_settings().media_path
 
+
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"
@@ -80,6 +81,7 @@ def medias_url(api_url):
 @pytest.fixture(scope="module")
 def tweets_url(api_url):
     return api_url.format(uri="/tweets")
+
 
 @pytest.fixture
 def media_path():

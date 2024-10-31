@@ -42,7 +42,9 @@ async def test_add_media(async_client, medias_url, session, media_path, name):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("name", ("text.txt", "data.csv"))
-async def test_add_media_bad_type(async_client, medias_url, session, media_path, name):
+async def test_add_media_bad_type(
+    async_client, medias_url, session, media_path, name
+):
     files = await aiofiles.os.listdir(media_path)
     start_len = len(files)
     _, file_type = name.split(".")

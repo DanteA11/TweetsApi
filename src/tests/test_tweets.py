@@ -342,6 +342,48 @@ async def test_get_tweets(
             assert like in likes
 
 
+@pytest.mark.anyio
+async def test_get_tweets_check_sorting(
+    async_client, tweets_url, session, base_url, medias_url
+):
+    me = await UserFactory.create()
+    other = await UserFactory.create()
+    tweet_first = await TweetFactory.create()
+    tweet_second = await TweetFactory.create()
+
+    author_first, author_second, me_key_obj = await asyncio.gather(
+        tweet_first.awaitable_attrs.author,
+        tweet_second.awaitable_attrs.author,
+        me.awaitable_attrs.api_key,
+    )
+
+    me_like_first = Like(user_id=me.id, tweet_id=tweet_first.id)
+    other_like_first = Like(user_id=other.id, tweet_id=tweet_first.id)
+    other_like_second = Like(user_id=other.id, tweet_id=tweet_second.id)
+
+    subscribe_first = Subscribe(follower_id=me.id, author_id=author_first.id)
+    subscribe_second = Subscribe(follower_id=me.id, author_id=author_second.id)
+    session.add_all(
+        (
+            me_like_first,
+            other_like_first,
+            other_like_second,
+            subscribe_first,
+            subscribe_second,
+        )
+    )
+    await session.commit()
+    response = await async_client.get(
+        tweets_url, headers={"api-key": me_key_obj.key}
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result.get("result") is True
+    tweets = result.get("tweets", [])
+    assert len(tweets) == 2
+    assert len(tweets[0].get("likes", [])) > len(tweets[1].get("likes", []))
+
+
 async def add_like(async_client, tweets_url, session):
     tweet = await TweetFactory.create()
     user = await UserFactory.create()

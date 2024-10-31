@@ -1,21 +1,27 @@
 """Функции для взаимодействия с базой данных."""
 
 import asyncio
+from typing import Any, Coroutine, TypeVar
 
 import aiofiles
 import aiofiles.os
 from fastapi import UploadFile
-from sqlalchemy import delete, select, update
+from sqlalchemy import Column, delete, desc, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.functions import count
+from starlette.datastructures import URL
 
 from ..settings import get_settings
 from ._models import Base, Like, Media, Subscribe, Tweet, User
 
 SETTINGS = get_settings()
+T = TypeVar("T", bound=Base)
 
 
-async def get_user_by_api_key(api_key: str, async_session: AsyncSession):
+async def get_user_by_api_key(
+    api_key: str, async_session: AsyncSession
+) -> User | None:
     """
     Запрашивает модель пользователя из базы данных с помощью ключа авторизации.
 
@@ -31,8 +37,11 @@ async def get_user_by_api_key(api_key: str, async_session: AsyncSession):
 
 
 async def get_full_user_info(
-    user_id: int, async_session: AsyncSession, *, user: User | None = None
-):
+    user_id: int | Column[int],
+    async_session: AsyncSession,
+    *,
+    user: User | None = None,
+) -> dict[str, Any]:
     """
     Запрашивает из базы полную информацию о пользователе.
 
@@ -43,11 +52,11 @@ async def get_full_user_info(
 
     :return: Словарь с данными пользователя:
     {'id': int, 'name': str, 'followers': [User], 'following': [User]}.
-    Если пользователь не найден и не передан как параметр User, возвращает None.
+    Если пользователь не найден и не передан как параметр User, возвращает {}.
     """
     user = user or await get_by_id(user_id, User, async_session)
     if not user:
-        return
+        return {}
     user_data = user.to_dict()
     query_following = (
         select(User)
@@ -71,7 +80,9 @@ async def get_full_user_info(
     return user_data
 
 
-async def get_by_id(id_: int, model: type[Base], async_session: AsyncSession):
+async def get_by_id(
+    id_: int | Column[int], model: type[T], async_session: AsyncSession
+) -> T | None:
     """
     Запрашивает модель из базы данных по id.
 
@@ -87,8 +98,8 @@ async def get_by_id(id_: int, model: type[Base], async_session: AsyncSession):
 
 
 async def add_subscribe(
-    user_id: int, author_id: int, async_session: AsyncSession
-):
+    user_id: int | Column[int], author_id: int, async_session: AsyncSession
+) -> bool:
     """
     Создает подписку на пользователя.
 
@@ -111,8 +122,8 @@ async def add_subscribe(
 
 
 async def drop_subscribe(
-    user_id: int, author_id: int, async_session: AsyncSession
-):
+    user_id: int | Column[int], author_id: int, async_session: AsyncSession
+) -> bool:
     """
     Удаляет подписку на пользователя.
 
@@ -133,8 +144,8 @@ async def drop_subscribe(
 
 
 async def add_media(
-    user_id: int, media: UploadFile, async_session: AsyncSession
-):
+    user_id: int | Column[int], media: UploadFile, async_session: AsyncSession
+) -> int:
     """
     Функция сохраняет медиафайл.
 
@@ -145,7 +156,8 @@ async def add_media(
     :return: Возвращает медиа ID.
     """
     path = SETTINGS.media_path
-    _, file_type = media.filename.split(".")
+    filename = media.filename or ""
+    _, file_type = filename.split(".")
     media_ = Media(user_id=user_id, file_type=file_type)
     async_session.add(media_)
     _, res = await asyncio.gather(async_session.commit(), media.read())
@@ -158,11 +170,11 @@ async def add_media(
 
 
 async def add_tweet(
-    user_id: int,
+    user_id: int | Column[int],
     tweet_data: str,
     tweet_media_ids: list[int],
     async_session: AsyncSession,
-):
+) -> dict[str, bool | int]:
     """
     Функция добавляет новый твит.
 
@@ -206,10 +218,10 @@ async def add_tweet(
 
 
 async def remove_tweet(
-    user_id: int,
+    user_id: int | Column[int],
     tweet_id: int,
     async_session: AsyncSession,
-):
+) -> bool:
     """
     Удаляет твит и связанные медиафайлы.
 
@@ -226,7 +238,7 @@ async def remove_tweet(
     query = delete(Tweet).filter(
         Tweet.id == tweet_id, Tweet.author_id == user_id
     )
-    tasks = [async_session.execute(query)]
+    tasks: list[Coroutine[Any, Any, Any]] = [async_session.execute(query)]
     for media in medias:
         tasks.append(
             aiofiles.os.remove(path.format(media.id, media.file_type))
@@ -238,8 +250,8 @@ async def remove_tweet(
 
 
 async def create_like(
-    user_id: int, tweet_id: int, async_session: AsyncSession
-):
+    user_id: int | Column[int], tweet_id: int, async_session: AsyncSession
+) -> bool:
     """
     Сохраняет информацию о лайке.
 
@@ -260,8 +272,8 @@ async def create_like(
 
 
 async def remove_like(
-    user_id: int, tweet_id: int, async_session: AsyncSession
-):
+    user_id: int | Column[int], tweet_id: int, async_session: AsyncSession
+) -> bool:
     """
     Удаляет информацию о лайке.
 
@@ -279,9 +291,11 @@ async def remove_like(
     return res.rowcount != 0
 
 
-async def get_tweets_info(  # TODO Исправить реализацию.
-    user_id: int, base_url: str, async_session: AsyncSession
-):
+async def get_tweets_info(
+    user_id: int | Column[int],
+    base_url: str | URL,
+    async_session: AsyncSession,
+) -> list[dict[str, Any]]:
     """
     Возвращает информацию о твитах, на которые подписан пользователь.
 
@@ -292,25 +306,35 @@ async def get_tweets_info(  # TODO Исправить реализацию.
     tweet_query = (
         select(Tweet)
         .join(Subscribe, Tweet.author_id == Subscribe.author_id)
+        .join(Like, Tweet.id == Like.tweet_id)
         .filter(Subscribe.follower_id == user_id)
+        .group_by(Tweet.id, Tweet.author_id, Tweet.content)
+        .order_by(desc(count(Tweet.likes)))
     )
-    result_tweets = await async_session.execute(tweet_query)
-    tweets = result_tweets.scalars().all()
+    result_tweets_task = asyncio.create_task(
+        async_session.execute(tweet_query)
+    )
     result = []
+    result_tweets = await result_tweets_task
+    tweets = result_tweets.scalars().all()
     for tweet in tweets:
-        medias = await tweet.awaitable_attrs.medias
+        media_task = asyncio.create_task(tweet.awaitable_attrs.medias)  # type: ignore
         res = tweet.to_dict()
+        medias = await media_task
+        author_task = asyncio.create_task(tweet.awaitable_attrs.author)  # type: ignore
         res["attachments"] = [
             f"{base_url}/{media.id}.{media.file_type}" for media in medias
         ]
-        author = await tweet.awaitable_attrs.author
+        author = await author_task
+        likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
         res["author"] = author
-        likes = await tweet.awaitable_attrs.likes
 
         likes_data = []
+        likes = await likes_task
         for like in likes:
+            user_task = asyncio.create_task(like.awaitable_attrs.user)  # type: ignore
             like_data = like.to_dict()
-            user = await like.awaitable_attrs.user
+            user = await user_task
             like_data["name"] = user.name
             likes_data.append(like_data)
 

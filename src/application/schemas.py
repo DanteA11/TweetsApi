@@ -84,7 +84,7 @@ class TweetIn(BaseModel):
     """
 
     tweet_data: str
-    tweet_media_ids: list[int] | None = None
+    tweet_media_ids: list[int] = []
 
 
 class TweetOut(BaseId):

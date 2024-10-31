@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Awaitable, Callable
+from typing import Annotated, Any, AsyncGenerator, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ class AsyncEngineGetter(metaclass=MetaSingleton):
     :param settings: Модель настроек. Должна иметь свойство database_url.
     """
 
-    def __init__(self, settings: BaseModel | None = None):
+    def __init__(self, settings: BaseModel | None = None) -> None:
         settings = settings or SETTINGS
         self.__engine: AsyncEngine | None = None
         self.database_url = settings.database_url  # type: ignore
@@ -52,7 +52,7 @@ class AsyncEngineGetter(metaclass=MetaSingleton):
         return self.engine
 
     @property
-    def engine(self):
+    def engine(self) -> AsyncEngine:
         """Асинхронный движок."""
         if not self.__engine:
             self.__engine = get_async_engine(self.database_url)
@@ -85,7 +85,7 @@ class Lifespan:
     }
     _kwargs_for_funcs: dict[str, dict[str, Any]] = {"start": {}, "stop": {}}
 
-    def __init__(self, *, drop_all: bool = False):
+    def __init__(self, *, drop_all: bool = False) -> None:
         async_engine_getter = AsyncEngineGetter()
         engine = async_engine_getter.engine
         self.start_kwargs = self.stop_kwargs = {
@@ -107,13 +107,13 @@ class Lifespan:
         self.app = app
         return self
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> None:
         """Вход в менеджер контекста."""
         start_coro = self._async_funcs["start"]
         kwargs = self._kwargs_for_funcs["start"]
         await start_coro(**kwargs)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Выход из менеджера контекста."""
         stop_coro = self._async_funcs["stop"]
         kwargs = self._kwargs_for_funcs["stop"]
@@ -140,22 +140,22 @@ class Lifespan:
         self._async_funcs["stop"] = async_func
 
     @property
-    def start_kwargs(self):
+    def start_kwargs(self) -> dict[str, Any]:
         """Аргументы функции начала контекста."""
         return self._kwargs_for_funcs["start"]
 
     @start_kwargs.setter
-    def start_kwargs(self, kwargs):
+    def start_kwargs(self, kwargs) -> None:
         """Аргументы функции начала контекста."""
         self._kwargs_for_funcs["start"] = kwargs
 
     @property
-    def stop_kwargs(self):
+    def stop_kwargs(self) -> dict[str, Any]:
         """Аргументы функции конца контекста."""
         return self._kwargs_for_funcs["stop"]
 
     @stop_kwargs.setter
-    def stop_kwargs(self, kwargs):
+    def stop_kwargs(self, kwargs) -> None:
         """Аргументы функции конца контекста."""
         self._kwargs_for_funcs["stop"] = kwargs
 
@@ -179,7 +179,7 @@ async def get_async_session(
     session_maker: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_async_session_maker)
     ]
-):
+) -> AsyncGenerator[AsyncSession, None]:
     """
     Функция-генератор для получения асинхронной сессии.
 
@@ -194,7 +194,7 @@ async def get_async_session(
 async def get_user_by_api_key(
     api_key: Annotated[str, Header(description="Ключ для авторизации")],
     a_session: async_session,
-):
+) -> User:
     """
     Зависимость для проверки наличия пользователя в базе по api-key заголовку.
 
@@ -222,7 +222,7 @@ async def get_user_by_api_key(
     return user
 
 
-async def check_file(file: UploadFile):
+async def check_file(file: UploadFile) -> UploadFile:
     """
     Функция проверяет файл на соответствие типа и размера.
 
@@ -234,8 +234,9 @@ async def check_file(file: UploadFile):
     detail: dict[str, list | str] = {
         "loc": ["body", "file"],
     }
+    file_size = file.size
     max_size = SETTINGS.max_image_size
-    if file.size > max_size:
+    if not file_size or file_size > max_size:
         res = detail.copy()
         res["msg"] = (
             f"File size ({file.size}) is "
@@ -245,7 +246,8 @@ async def check_file(file: UploadFile):
         details.append(res)
 
     supported_extensions = SETTINGS.media_extensions
-    *others, extension = file.filename.split(".")
+    filename = file.filename or ""
+    *others, extension = filename.split(".")
     if not others:
         extension = ""
     if not extension or extension.lower() not in supported_extensions:

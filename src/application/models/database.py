@@ -48,7 +48,7 @@ def get_async_session(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def start_conn(engine: AsyncEngine, drop_all: bool = False):
+async def start_conn(engine: AsyncEngine, drop_all: bool = False) -> None:
     """
     Функция выполняет действия, необходимые при подключении к БД.
 
@@ -62,7 +62,7 @@ async def start_conn(engine: AsyncEngine, drop_all: bool = False):
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def stop_conn(engine: AsyncEngine, drop_all: bool = False):
+async def stop_conn(engine: AsyncEngine, drop_all: bool = False) -> None:
     """
     Функция выполняет действия, необходимые при отключении от БД.
 

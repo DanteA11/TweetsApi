@@ -13,7 +13,7 @@ line_length = 79
 [tool.flake8]
 exclude = [
     ".git", "__pycache__",
-    ".venv", "alembic"
+    ".venv", "alembic", "tests"
 ]
 max-line-length = 79
 extend-select = "B950"
@@ -26,4 +26,4 @@ env = "D:DATABASE_URL=postgresql+psycopg_async://admin:admin@localhost/postgres"
 
 [tool.mypy]
 plugins = "sqlalchemy.ext.mypy.plugin"
-exclude = "tests"
+exclude = ["tests", "alembic"]
