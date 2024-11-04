@@ -1,6 +1,8 @@
 """Функции для взаимодействия с базой данных."""
 
 import asyncio
+import logging
+import os.path
 from typing import Any, Coroutine, TypeVar
 
 import aiofiles
@@ -16,6 +18,11 @@ from ..settings import get_settings
 from ._models import Base, Like, Media, Subscribe, Tweet, User
 
 SETTINGS = get_settings()
+logger = logging.getLogger(f"{SETTINGS.api_name}.{__name__}")
+logger.setLevel(SETTINGS.log_level)
+DEBUG = logger.isEnabledFor(
+    logging.DEBUG  # https://docs.python.org/3/howto/logging.html#optimization
+)
 T = TypeVar("T", bound=Base)
 
 
@@ -30,9 +37,16 @@ async def get_user_by_api_key(
 
     :return: Модель User по api_key, если не найден, возвращает None.
     """
+    if DEBUG:
+        logger.debug("Получен api-key")
     query = select(User).filter(User.api_key.has(key=api_key))
     result = await async_session.execute(query)
     user: User | None = result.scalars().first()  # type: ignore
+    if DEBUG:
+        if user:
+            logger.debug(f"Функция вернула пользователя: {user}")
+        else:
+            logger.debug("Пользователь не найден.")
     return user
 
 
@@ -54,8 +68,11 @@ async def get_full_user_info(
     {'id': int, 'name': str, 'followers': [User], 'following': [User]}.
     Если пользователь не найден и не передан как параметр User, возвращает {}.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, user={user}")
     user = user or await get_by_id(user_id, User, async_session)
     if not user:
+        logger.info("Пользователь не найден")
         return {}
     user_data = user.to_dict()
     query_following = (
@@ -76,7 +93,8 @@ async def get_full_user_info(
 
     user_data["following"] = following.scalars().all()
     user_data["followers"] = followers.scalars().all()
-
+    if DEBUG:
+        logger.debug(f"Функция вернула пользовательские данные: {user_data}")
     return user_data
 
 
@@ -92,9 +110,14 @@ async def get_by_id(
 
     :return: Объект переданной модели, если не найдено, то None.
     """
+    if DEBUG:
+        logger.debug(f"id={id_}, model={model}")
     query = select(model).filter(model.id == id_)  # type: ignore
     result = await async_session.execute(query)
-    return result.scalars().first()
+    res = result.scalars().first()
+    if DEBUG:
+        logger.debug(f"Функция вернула {res}")
+    return res
 
 
 async def add_subscribe(
@@ -109,7 +132,10 @@ async def add_subscribe(
 
     :return: True, если подписка выполнена, иначе False.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, author_id={author_id}")
     if user_id == author_id:
+        logger.info("user_id == author_id. Нельзя подписаться на самого себя")
         return False
     subscribe = Subscribe(follower_id=user_id, author_id=author_id)
     async_session.add(subscribe)
@@ -117,6 +143,7 @@ async def add_subscribe(
         await async_session.commit()
     except IntegrityError:
         await async_session.rollback()
+        logger.info("Подписка уже существует")
         return False
     return True
 
@@ -133,14 +160,22 @@ async def drop_subscribe(
 
     :return: Если подписка удалена, возвращает True, иначе - False.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, author_id={author_id}")
     if user_id == author_id:
+        logger.info("user_id == author_id. Нельзя отписаться от самого себя")
         return False
     query = delete(Subscribe).filter(
         Subscribe.follower_id == user_id, Subscribe.author_id == author_id
     )
     res = await async_session.execute(query)
     await async_session.commit()
-    return res.rowcount != 0
+    result = res.rowcount != 0
+    if result:
+        logger.info("Подписка деактивирована")
+    else:
+        logger.info("Подписка не существует")
+    return result
 
 
 async def add_media(
@@ -155,6 +190,8 @@ async def add_media(
 
     :return: Возвращает медиа ID.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, media={media}")
     path = SETTINGS.media_path
     filename = media.filename or ""
     _, file_type = filename.split(".")
@@ -162,10 +199,13 @@ async def add_media(
     async_session.add(media_)
     _, res = await asyncio.gather(async_session.commit(), media.read())
     media_id = await media_.awaitable_attrs.id
-    res_path = f"{path}/{media_id}.{file_type}"
-
+    res_path_coro = asyncio.to_thread(
+        os.path.join, path, f"{media_id}.{file_type}"
+    )
+    res_path = await res_path_coro
     async with aiofiles.open(res_path, "wb") as file:
         await file.write(res)
+    logger.info(f"Файл сохранен в {res_path}, media_id={media_id}")
     return media_id
 
 
@@ -190,6 +230,8 @@ async def add_tweet(
     :return: Словарь с ключом result (type bool) и
     опциональным ключом tweet_id (type int).
     """
+    if DEBUG:
+        logger.debug(f"tweet_media_ids={tweet_media_ids}")
     tweet = Tweet(content=tweet_data, author_id=user_id)
     async_session.add(tweet)
     await async_session.flush()
@@ -197,7 +239,9 @@ async def add_tweet(
     tweet_id = await tweet.awaitable_attrs.id
     if not tweet_media_ids:
         await async_session.commit()
-        return {"result": True, "tweet_id": tweet_id}
+        result = {"result": True, "tweet_id": tweet_id}
+        logger.info(f"Твит сохранен. Функция вернула {result}")
+        return result
 
     query = (
         update(Media)
@@ -208,13 +252,17 @@ async def add_tweet(
         )
         .values(tweet_id=tweet_id)
     )
-    result = await async_session.execute(query)
-    if result.rowcount == 0:
+    res = await async_session.execute(query)
+    if res.rowcount == 0:
         await async_session.rollback()
-        return {"result": False}
+        result = {"result": False}
+        logger.info(f"Не удалось сохранить твит. Функция вернула {result}")
+        return result
 
     await async_session.commit()
-    return {"result": True, "tweet_id": tweet_id}
+    result = {"result": True, "tweet_id": tweet_id}
+    logger.info(f"Твит сохранен. Функция вернула {result}")
+    return result
 
 
 async def remove_tweet(
@@ -230,23 +278,29 @@ async def remove_tweet(
     :param async_session: Экземпляр сессии.
     :return: Если твит найден и удален, возвращает True, иначе False
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
     query_medias = select(Media).filter(Media.tweet_id == tweet_id)
-
-    medias_res = await async_session.execute(query_medias)
-    medias = medias_res.scalars().all()
+    media_task = asyncio.create_task(async_session.execute(query_medias))
     path = SETTINGS.media_path
     query = delete(Tweet).filter(
         Tweet.id == tweet_id, Tweet.author_id == user_id
     )
     tasks: list[Coroutine[Any, Any, Any]] = [async_session.execute(query)]
+    medias_res = await media_task
+    medias = medias_res.scalars().all()
     for media in medias:
-        tasks.append(
-            aiofiles.os.remove(path.format(media.id, media.file_type))
+        media_path_coro = asyncio.to_thread(
+            os.path.join, path, media.id, media.file_type
         )
+        media_path = await media_path_coro
+        tasks.append(aiofiles.os.remove(media_path))
     results = await asyncio.gather(*tasks)
     await async_session.commit()
     res = results[0]
-    return res.rowcount != 0
+    result = res.rowcount != 0
+    logger.info(f"Функция вернула {result}")
+    return result
 
 
 async def create_like(
@@ -261,13 +315,17 @@ async def create_like(
 
     :return: True, если лайк поставлен, иначе False.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
     like = Like(user_id=user_id, tweet_id=tweet_id)
     async_session.add(like)
     try:
         await async_session.commit()
     except IntegrityError:
         await async_session.rollback()
+        logger.info("Не удалось поставить лайк")
         return False
+    logger.info("Лайк поставлен")
     return True
 
 
@@ -283,12 +341,19 @@ async def remove_like(
 
     :return: True, если лайк удален, иначе False.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
     query = delete(Like).filter(
         Like.user_id == user_id, Like.tweet_id == tweet_id
     )
     res = await async_session.execute(query)
     await async_session.commit()
-    return res.rowcount != 0
+    result = res.rowcount != 0
+    if result:
+        logger.info("Лайк не найден")
+    else:
+        logger.info("Лайк удален")
+    return result
 
 
 async def get_tweets_info(
@@ -303,6 +368,8 @@ async def get_tweets_info(
     :param base_url: Базовый URL API.
     :param async_session: Экземпляр сессии.
     """
+    if DEBUG:
+        logger.debug(f"user_id={user_id}, base_url={base_url}")
     tweet_query = (
         select(Tweet)
         .join(Subscribe, Tweet.author_id == Subscribe.author_id)
@@ -317,21 +384,21 @@ async def get_tweets_info(
     result = []
     result_tweets = await result_tweets_task
     tweets = result_tweets.scalars().all()
+    if DEBUG:
+        logger.debug(f"Получен список твитов: {tweets}")
     for tweet in tweets:
         media_task = asyncio.create_task(tweet.awaitable_attrs.medias)  # type: ignore
         res = tweet.to_dict()
-        medias = await media_task
-        author_task = asyncio.create_task(tweet.awaitable_attrs.author)  # type: ignore
         res["attachments"] = [
-            f"{base_url}/{media.id}.{media.file_type}" for media in medias
+            f"{base_url}/{media.id}.{media.file_type}"
+            for media in await media_task
         ]
-        author = await author_task
+
+        res["author"] = await tweet.awaitable_attrs.author
         likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
-        res["author"] = author
 
         likes_data = []
-        likes = await likes_task
-        for like in likes:
+        for like in await likes_task:
             user_task = asyncio.create_task(like.awaitable_attrs.user)  # type: ignore
             like_data = like.to_dict()
             user = await user_task
@@ -340,4 +407,6 @@ async def get_tweets_info(
 
         res["likes"] = likes_data
         result.append(res)
+    if DEBUG:
+        logger.debug(f"Функция вернула: {result}")
     return result

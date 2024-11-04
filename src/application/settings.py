@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     max_image_size: int
     media_path: str
     media_extensions: tuple[str, ...] = ("png", "jpg")
+    api_name: str
+    log_level: str
 
     model_config = SettingsConfigDict(env_file=".env")
 

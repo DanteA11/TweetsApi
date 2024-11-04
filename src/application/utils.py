@@ -1,8 +1,50 @@
 """Вспомогательные классы и функции."""
 
+import logging
+import queue
+from logging.handlers import QueueHandler, QueueListener
 from typing import Callable
 
 from fastapi import FastAPI
+
+
+def async_logger_init(
+    name: str,
+    level: int | str,
+    formater: logging.Formatter,
+    *handlers: logging.Handler,
+    propagate: bool = False
+) -> logging.Logger:
+    """
+    Инициализирует логер.
+
+    Логер имеет единственный обработчик - "QueueHandler"
+    (https://docs.python.org/3/library/logging.handlers.html#queuehandler).
+    Сообщения направляются в очередь, откуда их забирает "QueueListener"
+    (https://docs.python.org/3/library/logging.handlers.html#queuelistener)
+    в отдельном потоке и распределяет сообщения по добавленным обработчикам.
+    Это позволяет не блокировать поток выполнения при логировании.
+
+    :param name: Имя логера.
+    :param level: Уровень логирования.
+    :param formater: Объект форматирования.
+    :param handlers: Обработчики.
+    :param propagate: Передавать ли записанные события
+        обработчикам логера более высокого уровня.
+    :return: Объект логера.
+    """
+    log_queue: queue.Queue = queue.Queue()
+    queue_handler = QueueHandler(log_queue)
+    queue_handler.setFormatter(formater)
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(queue_handler)
+    logger.propagate = propagate
+
+    queue_listener = QueueListener(log_queue, *handlers)
+    queue_listener.start()
+
+    return logger
 
 
 def update_schema_name(app: FastAPI, function: Callable, name: str) -> None:

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any, AsyncGenerator, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
@@ -25,6 +26,12 @@ from .settings import get_settings
 from .utils import MetaSingleton
 
 SETTINGS = get_settings()
+logger_name = f"{SETTINGS.api_name}.{__name__}"
+logger = logging.getLogger(logger_name)
+logger.setLevel(SETTINGS.log_level)
+DEBUG = logger.isEnabledFor(
+    logging.DEBUG  # https://docs.python.org/3/howto/logging.html#optimization
+)
 
 
 class AsyncEngineGetter(metaclass=MetaSingleton):
@@ -222,7 +229,7 @@ async def get_user_by_api_key(
     return user
 
 
-async def check_file(file: UploadFile) -> UploadFile:
+def check_file(file: UploadFile) -> UploadFile:
     """
     Функция проверяет файл на соответствие типа и размера.
 
@@ -230,6 +237,8 @@ async def check_file(file: UploadFile) -> UploadFile:
     :return: Файл.
     :raise HTTPException: Выбрасывает, если файл не прошел валидацию.
     """
+    if DEBUG:
+        logger.debug(f"file={file}")
     details = []
     detail: dict[str, list | str] = {
         "loc": ["body", "file"],
@@ -237,6 +246,11 @@ async def check_file(file: UploadFile) -> UploadFile:
     file_size = file.size
     max_size = SETTINGS.max_image_size
     if not file_size or file_size > max_size:
+        if DEBUG:
+            logger.debug(
+                "Не найден размер файла или размер "
+                "файла больше максимально допустимого"
+            )
         res = detail.copy()
         res["msg"] = (
             f"File size ({file.size}) is "
@@ -251,6 +265,10 @@ async def check_file(file: UploadFile) -> UploadFile:
     if not others:
         extension = ""
     if not extension or extension.lower() not in supported_extensions:
+        if DEBUG:
+            logger.debug(
+                "У файла не указано расширение или " "расширение недопустимо"
+            )
         res = detail.copy()
         res["msg"] = (
             f"Extension '{extension}' "
@@ -260,7 +278,9 @@ async def check_file(file: UploadFile) -> UploadFile:
         details.append(res)
 
     if details:
+        logger.info("Функция выбросила исключение")
         raise HTTPException(status_code=422, detail=details)
+    logger.info("Функция вернула файл")
     return file
 
 
