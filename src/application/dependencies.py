@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from .models import User, crud
+from .models import CrudController, User
 from .models.database import get_async_engine
 from .models.database import get_async_session as get_session
 from .models.database import start_conn, stop_conn
@@ -182,38 +182,36 @@ def get_async_session_maker(
     return get_session(engine)
 
 
-async def get_async_session(
+async def get_crud_controller(
     session_maker: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_async_session_maker)
     ]
-) -> AsyncGenerator[AsyncSession, None]:
+) -> AsyncGenerator[CrudController, None]:
     """
-    Функция-генератор для получения асинхронной сессии.
+    Функция-генератор для контроллера для управления базой данных.
 
     :param session_maker: Асинхронный движок.
 
-    :return: Асинхронная сессия
+    :return: Контроллер
     """
     async with session_maker() as session:
-        yield session
+        yield CrudController(session=session)
 
 
 async def get_user_by_api_key(
     api_key: Annotated[str, Header(description="Ключ для авторизации")],
-    a_session: async_session,
+    crud: crud_controller,
 ) -> User:
     """
     Зависимость для проверки наличия пользователя в базе по api-key заголовку.
 
     :param api_key: Строка заголовка.
-    :param a_session: Объект асинхронной сессии.
+    :param crud: Контроллер для управления запросами к базе данных.
 
     :return: Пользователь
     :raise HTTPException: Выбрасывает, если пользователь не найден.
     """
-    user = await crud.get_user_by_api_key(
-        api_key=api_key, async_session=a_session
-    )
+    user = await crud.get_user_by_api_key(api_key=api_key)
     if not user:
         raise HTTPException(
             status_code=422,
@@ -267,7 +265,7 @@ def check_file(file: UploadFile) -> UploadFile:
     if not extension or extension.lower() not in supported_extensions:
         if DEBUG:
             logger.debug(
-                "У файла не указано расширение или " "расширение недопустимо"
+                "У файла не указано расширение или расширение недопустимо"
             )
         res = detail.copy()
         res["msg"] = (
@@ -284,6 +282,6 @@ def check_file(file: UploadFile) -> UploadFile:
     return file
 
 
-async_session = Annotated[AsyncSession, Depends(get_async_session)]
+crud_controller = Annotated[CrudController, Depends(get_crud_controller)]
 ApiKey = Annotated[User, Depends(get_user_by_api_key)]
 file = Annotated[UploadFile, Depends(check_file)]

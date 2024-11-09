@@ -3,10 +3,19 @@ import asyncio
 import pytest
 from sqlalchemy import select, update
 
-from application.models import ApiKey, Like, Media, Subscribe, Tweet, User
-from application.models.crud import create_like, get_by_id
+from application.models import (
+    ApiKey,
+    CrudController,
+    Like,
+    Media,
+    Subscribe,
+    Tweet,
+    User,
+)
 
 from .factories import MediaFactory, TweetFactory, UserFactory
+
+get_by_id = CrudController.get_by_id
 
 
 @pytest.mark.anyio
