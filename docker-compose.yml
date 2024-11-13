@@ -1,30 +1,54 @@
 services:
 
-  db:
+  postgres:
     image: postgres
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    hostname: ${POSTGRES_HOSTNAME}
+    command:
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql.conf"
     ports:
-      - "5432:5432"
+      - 5432:5432
     volumes:
-      - ./db/:/var/lib/postgresql/data
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - "8080:8080"
+      - ./postgres_data/:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql.conf:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 4G
+    networks:
+      - postgres
 
   app:
     build:
       context: src
     links:
-      - db
-      - adminer
+      - postgres
     environment:
-      - DATABASE_URL=postgresql+psycopg_async://admin:admin@db/admin
+      - DATABASE_URL=postgresql+psycopg_async://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOSTNAME}/${POSTGRES_DB}
+      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE}
+      - MEDIA_PATH=${MEDIA_PATH}
+      - API_NAME=${API_NAME}
+      - LOG_LEVEL=${LOG_LEVEL}
     stop_signal: SIGKILL
     restart: always
     ports:
       - 8000:80
+    networks:
+      - postgres
+
+networks:
+  postgres:
+    driver: bridge

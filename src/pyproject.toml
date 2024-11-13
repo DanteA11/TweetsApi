@@ -22,7 +22,6 @@ per-file-ignores = "__init__.py:F401,F403"
 
 [tool.pytest.ini_options]
 filterwarnings = "ignore::DeprecationWarning"
-env = "D:DATABASE_URL=postgresql+psycopg_async://admin:admin@localhost/postgres"
 
 [tool.mypy]
 plugins = "sqlalchemy.ext.mypy.plugin"
