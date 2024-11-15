@@ -48,6 +48,8 @@ services:
       - 8000:80
     networks:
       - postgres
+    volumes:
+      - ./medias/:/app/static/medias
 
 networks:
   postgres:

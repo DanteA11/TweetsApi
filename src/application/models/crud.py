@@ -8,7 +8,7 @@ from typing import Any, Coroutine, TypeVar
 import aiofiles
 import aiofiles.os
 from fastapi import UploadFile
-from sqlalchemy import Column, delete, desc, select, update
+from sqlalchemy import Column, delete, desc, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import count
@@ -52,7 +52,7 @@ class CrudController:
         :return: Модель User по api_key, если не найден, возвращает None.
         """
         if DEBUG:
-            logger.debug("Получен api-key")
+            logger.debug(f"Получен api-key {api_key}")
         query = select(User).filter(User.api_key.has(key=api_key))
         result = await self.async_session.execute(query)
         user: User | None = result.scalars().first()  # type: ignore
@@ -298,23 +298,23 @@ class CrudController:
         query = delete(Tweet).filter(
             Tweet.id == tweet_id, Tweet.author_id == user_id
         )
-        tasks: list[Coroutine[Any, Any, Any]] = [
-            self.async_session.execute(query)
-        ]
         medias_res = await media_task
+        tweet_result = await self.async_session.execute(query)
+        if tweet_result.rowcount == 0:
+            if DEBUG:
+                logger.debug("Tweet не принадлежит пользователю или не найден")
+            return False
+        tasks: list[Coroutine[Any, Any, Any]] = [self.async_session.commit()]
         medias = medias_res.scalars().all()
         for media in medias:
             media_path_coro = asyncio.to_thread(
-                os.path.join, path, media.id, media.file_type
+                os.path.join, path, f"{media.id}.{media.file_type}"
             )
             media_path = await media_path_coro
             tasks.append(aiofiles.os.remove(media_path))
-        results = await asyncio.gather(*tasks)
-        await self.async_session.commit()
-        res = results[0]
-        result = res.rowcount != 0
-        logger.info(f"Функция вернула {result}")
-        return result
+        await asyncio.gather(*tasks)
+        logger.info("Tweet удален")
+        return True
 
     async def create_like(
         self, user_id: int | Column[int], tweet_id: int
@@ -380,9 +380,16 @@ class CrudController:
             logger.debug(f"user_id={user_id}, base_url={base_url}")
         tweet_query = (
             select(Tweet)
-            .join(Subscribe, Tweet.author_id == Subscribe.author_id)
-            .join(Like, Tweet.id == Like.tweet_id)
-            .filter(Subscribe.follower_id == user_id)
+            .join(
+                Subscribe, Tweet.author_id == Subscribe.author_id, isouter=True
+            )
+            .join(Like, Tweet.id == Like.tweet_id, isouter=True)
+            .filter(
+                or_(
+                    Subscribe.follower_id == user_id,
+                    Tweet.author_id == user_id,
+                )
+            )
             .group_by(Tweet.id, Tweet.author_id, Tweet.content)
             .order_by(desc(count(Tweet.likes)))
         )

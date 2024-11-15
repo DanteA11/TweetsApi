@@ -330,6 +330,7 @@ async def test_get_tweets(
     assert result_field is True
     tweets_field = result.get("tweets")
     assert isinstance(tweets_field, list)
+    assert len(tweets_field) == 1
 
     for tweet_field in tweets_field:
         id_field = tweet_field.get("id")
