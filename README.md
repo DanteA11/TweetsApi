@@ -67,7 +67,7 @@ docker compose up
 5. Переходим в директорию src и устанавливаем библиотеки.
     ```shell
    cd src
-   pip install -r requrements.txt
+   pip install -r requirements.txt
    pip install -r requirements_test.txt
     ```
 6. Запускаем тесты:
