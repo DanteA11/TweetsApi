@@ -36,7 +36,7 @@ def app(engine) -> Generator[FastAPI, None, None]:
     asyncio.run(stop_conn(engine, drop_all=True))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 async def async_client(app, base_url):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url=base_url

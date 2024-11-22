@@ -348,6 +348,7 @@ async def test_get_tweets(
         assert author_field == {"name": author.name, "id": author_id}
         likes_field = tweet_field.get("likes")
         assert isinstance(likes_field, list)
+        assert len(likes_field) == 2
         for like in likes_field:
             assert like in likes
 

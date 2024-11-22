@@ -291,22 +291,24 @@ class CrudController:
         if DEBUG:
             logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
         query_medias = select(Media).filter(Media.tweet_id == tweet_id)
+        query_tweet = delete(Tweet).filter(
+            Tweet.id == tweet_id, Tweet.author_id == user_id
+        )
+        tweet_task = asyncio.create_task(
+            self.async_session.execute(query_tweet)
+        )
         media_task = asyncio.create_task(
             self.async_session.execute(query_medias)
         )
         path = SETTINGS.media_path
-        query = delete(Tweet).filter(
-            Tweet.id == tweet_id, Tweet.author_id == user_id
-        )
-        medias_res = await media_task
-        tweet_result = await self.async_session.execute(query)
+        tweet_result = await tweet_task
         if tweet_result.rowcount == 0:
             if DEBUG:
                 logger.debug("Tweet не принадлежит пользователю или не найден")
             return False
         tasks: list[Coroutine[Any, Any, Any]] = [self.async_session.commit()]
-        medias = medias_res.scalars().all()
-        for media in medias:
+        medias_res = await media_task
+        for media in medias_res.scalars().all():
             media_path_coro = asyncio.to_thread(
                 os.path.join, path, f"{media.id}.{media.file_type}"
             )
@@ -403,14 +405,14 @@ class CrudController:
             logger.debug(f"Получен список твитов: {tweets}")
         for tweet in tweets:
             media_task = asyncio.create_task(tweet.awaitable_attrs.medias)  # type: ignore
+            author_task = asyncio.create_task(tweet.awaitable_attrs.author)  # type: ignore
+            likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
             res = tweet.to_dict()
             res["attachments"] = [
                 f"{base_url}/{media.id}.{media.file_type}"
                 for media in await media_task
             ]
-
-            res["author"] = await tweet.awaitable_attrs.author
-            likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
+            res["author"] = await author_task
 
             likes_data = []
             for like in await likes_task:

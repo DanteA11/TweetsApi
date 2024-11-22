@@ -2,6 +2,7 @@ services:
 
   postgres:
     image: postgres
+    container_name: ${POSTGRES_CONTAINER_NAME}
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -34,22 +35,23 @@ services:
   app:
     build:
       context: src
-    links:
-      - postgres
+    container_name: ${APP_CONTAINER_NAME}
+    depends_on:
+      - ${POSTGRES_HOSTNAME}
     environment:
       - DATABASE_URL=postgresql+psycopg_async://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOSTNAME}/${POSTGRES_DB}
       - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE}
-      - MEDIA_PATH=${MEDIA_PATH}
+      - MEDIA_PATH=static/medias
       - API_NAME=${API_NAME}
       - LOG_LEVEL=${LOG_LEVEL}
     stop_signal: SIGKILL
-    restart: always
+    restart: on-failure
     ports:
-      - 8000:80
+      - ${PORT}:80
     networks:
       - postgres
     volumes:
-      - ./medias/:/app/static/medias
+      - ./src/static/medias/:/app/static/medias
 
 networks:
   postgres:

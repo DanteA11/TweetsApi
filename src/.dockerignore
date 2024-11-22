@@ -1,9 +1,7 @@
 alembic
-tests
 alembic.ini
 .pytest_cache
 .mypy_cache
 .dockerignore
 Dockerfile
 __pycache__
-pyproject.toml
