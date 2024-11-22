@@ -90,7 +90,7 @@ docker compose up
    ```
 3. Входим в контейнер с приложением:
    ```shell
-   dokcer exec -ti 'имя или id контейнера' /bin/bash
+   docker exec -ti 'имя или id контейнера' /bin/bash
    ```
 4. Устанавливаем библиотеки:
    ```shell
