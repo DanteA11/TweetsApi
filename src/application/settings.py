@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     media_extensions: tuple[str, ...] = ("png", "jpg")
     api_name: str
     log_level: str
+    port: str
 
     model_config = SettingsConfigDict(env_file=".env")
 

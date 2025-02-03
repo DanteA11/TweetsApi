@@ -44,6 +44,7 @@ services:
       - MEDIA_PATH=static/medias
       - API_NAME=${API_NAME}
       - LOG_LEVEL=${LOG_LEVEL}
+      - PORT=${PORT}
     stop_signal: SIGKILL
     restart: on-failure
     ports:

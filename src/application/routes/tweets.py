@@ -22,7 +22,7 @@ async def get_tweets(
     try:
         tweets = await crud.get_tweets_info(
             user_id=user.id,
-            base_url=request.url_for("Загрузить файл"),
+            media_url=request.url_for("Загрузить файл"),
         )
     except Exception as exc:
         return JSONResponse(

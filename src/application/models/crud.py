@@ -370,16 +370,16 @@ class CrudController:
     async def get_tweets_info(
         self,
         user_id: int | Column[int],
-        base_url: str | URL,
+        media_url: URL,
     ) -> list[dict[str, Any]]:
         """
         Возвращает информацию о твитах, на которые подписан пользователь.
 
         :param user_id: ID пользователя.
-        :param base_url: Базовый URL API.
+        :param media_url: Базовый URL API.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, base_url={base_url}")
+            logger.debug(f"user_id={user_id}, base_url={media_url}")
         tweet_query = (
             select(Tweet)
             .join(
@@ -409,7 +409,9 @@ class CrudController:
             likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
             res = tweet.to_dict()
             res["attachments"] = [
-                f"{base_url}/{media.id}.{media.file_type}"
+                (f"{media_url.scheme}://{media_url.hostname}:"
+                 f"{SETTINGS.port}/{media_url.path}/{media.id}"
+                 f".{media.file_type}")
                 for media in await media_task
             ]
             res["author"] = await author_task
