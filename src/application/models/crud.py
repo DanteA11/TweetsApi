@@ -3,7 +3,8 @@
 import asyncio
 import logging
 import os.path
-from typing import Any, Coroutine, TypeVar
+from collections import defaultdict
+from typing import Any, Coroutine, TypeVar, Callable
 
 import aiofiles
 import aiofiles.os
@@ -52,13 +53,13 @@ class CrudController:
         :return: Модель User по api_key, если не найден, возвращает None.
         """
         if DEBUG:
-            logger.debug(f"Получен api-key {api_key}")
+            logger.debug("Получен api-key %s", api_key)
         query = select(User).filter(User.api_key.has(key=api_key))
         result = await self.async_session.execute(query)
-        user: User | None = result.scalars().first()  # type: ignore
+        user: User = result.scalars().first()  # type: ignore
         if DEBUG:
             if user:
-                logger.debug(f"Функция вернула пользователя: {user}")
+                logger.debug("Функция вернула пользователя: %s", user)
             else:
                 logger.debug("Пользователь не найден.")
         return user
@@ -81,7 +82,7 @@ class CrudController:
         Если пользователь не найден и не передан как параметр User, возвращает {}.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, user={user}")
+            logger.debug("user_id=%s, user=%s", user_id, user)
         user = user or await self.get_by_id(user_id, User, self.async_session)
         if not user:
             logger.info("Пользователь не найден")
@@ -107,7 +108,7 @@ class CrudController:
         user_data["followers"] = followers.scalars().all()
         if DEBUG:
             logger.debug(
-                f"Функция вернула пользовательские данные: {user_data}"
+                f"Функция вернула пользовательские данные: %s", user_data
             )
         return user_data
 
@@ -125,12 +126,12 @@ class CrudController:
         :return: Объект переданной модели, если не найдено, то None.
         """
         if DEBUG:
-            logger.debug(f"id={id_}, model={model}")
+            logger.debug("id=%s, model=%s", id_, model)
         query = select(model).filter(model.id == id_)  # type: ignore
         result = await async_session.execute(query)
         res = result.scalars().first()
         if DEBUG:
-            logger.debug(f"Функция вернула {res}")
+            logger.debug("Функция вернула %s", res)
         return res
 
     async def add_subscribe(
@@ -145,7 +146,7 @@ class CrudController:
         :return: True, если подписка выполнена, иначе False.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, author_id={author_id}")
+            logger.debug("user_id=%s, author_id=%s", user_id, author_id)
         if user_id == author_id:
             logger.info(
                 "user_id == author_id. Нельзя подписаться на самого себя"
@@ -173,7 +174,7 @@ class CrudController:
         :return: Если подписка удалена, возвращает True, иначе - False.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, author_id={author_id}")
+            logger.debug("user_id=%s, author_id=%s", user_id, author_id)
         if user_id == author_id:
             logger.info(
                 "user_id == author_id. Нельзя отписаться от самого себя"
@@ -203,9 +204,9 @@ class CrudController:
         :return: Возвращает медиа ID.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, media={media}")
+            logger.debug("user_id=%s, media=%s", user_id, media)
         path = SETTINGS.media_path
-        filename = media.filename or ""
+        filename = media.filename or "."
         _, file_type = filename.split(".")
         media_ = Media(user_id=user_id, file_type=file_type)
         self.async_session.add(media_)
@@ -213,13 +214,10 @@ class CrudController:
             self.async_session.commit(), media.read()
         )
         media_id = await media_.awaitable_attrs.id
-        res_path_coro = asyncio.to_thread(
-            os.path.join, path, f"{media_id}.{file_type}"
-        )
-        res_path = await res_path_coro
+        res_path = os.path.join(path, f"{media_id}.{file_type}")
         async with aiofiles.open(res_path, "wb") as file:
             await file.write(res)
-        logger.info(f"Файл сохранен в {res_path}, media_id={media_id}")
+        logger.info("Файл сохранен в %s, media_id=%s", res_path, media_id)
         return media_id
 
     async def add_tweet(
@@ -231,7 +229,7 @@ class CrudController:
         """
         Функция добавляет новый твит.
 
-        Переда добавлением информации о медиафайлах в твит,
+        Перед добавлением информации о медиафайлах в твит,
          проверяет, чтобы id пользователя равнялось
         id автора медиафайла и чтобы медиафайл не участвовал в других твитах.
 
@@ -243,7 +241,7 @@ class CrudController:
         опциональным ключом tweet_id (type int).
         """
         if DEBUG:
-            logger.debug(f"tweet_media_ids={tweet_media_ids}")
+            logger.debug("tweet_media_ids=%s", tweet_media_ids)
         tweet = Tweet(content=tweet_data, author_id=user_id)
         self.async_session.add(tweet)
         await self.async_session.flush()
@@ -252,7 +250,7 @@ class CrudController:
         if not tweet_media_ids:
             await self.async_session.commit()
             result = {"result": True, "tweet_id": tweet_id}
-            logger.info(f"Твит сохранен. Функция вернула {result}")
+            logger.info("Твит сохранен. Функция вернула %s", result)
             return result
 
         query = (
@@ -268,12 +266,12 @@ class CrudController:
         if res.rowcount == 0:
             await self.async_session.rollback()
             result = {"result": False}
-            logger.info(f"Не удалось сохранить твит. Функция вернула {result}")
+            logger.info("Не удалось сохранить твит. Функция вернула %s", result)
             return result
 
         await self.async_session.commit()
         result = {"result": True, "tweet_id": tweet_id}
-        logger.info(f"Твит сохранен. Функция вернула {result}")
+        logger.info("Твит сохранен. Функция вернула %s", result)
         return result
 
     async def remove_tweet(
@@ -289,30 +287,29 @@ class CrudController:
         :return: Если твит найден и удален, возвращает True, иначе False
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
+            logger.debug("user_id=%s, tweet_id=%s", user_id, tweet_id)
         query_medias = select(Media).filter(Media.tweet_id == tweet_id)
         query_tweet = delete(Tweet).filter(
             Tweet.id == tweet_id, Tweet.author_id == user_id
         )
-        tweet_task = asyncio.create_task(
-            self.async_session.execute(query_tweet)
-        )
-        media_task = asyncio.create_task(
-            self.async_session.execute(query_medias)
-        )
-        path = SETTINGS.media_path
-        tweet_result = await tweet_task
-        if tweet_result.rowcount == 0:
-            if DEBUG:
-                logger.debug("Tweet не принадлежит пользователю или не найден")
-            return False
-        tasks: list[Coroutine[Any, Any, Any]] = [self.async_session.commit()]
-        medias_res = await media_task
-        for media in medias_res.scalars().all():
-            media_path_coro = asyncio.to_thread(
-                os.path.join, path, f"{media.id}.{media.file_type}"
+        async with asyncio.TaskGroup() as tg:
+            tweet_task = tg.create_task(
+                self.async_session.execute(query_tweet)
             )
-            media_path = await media_path_coro
+            media_task = tg.create_task(
+                self.async_session.execute(query_medias)
+            )
+            path = SETTINGS.media_path
+            tweet_result = await tweet_task
+            if tweet_result.rowcount == 0:
+                if DEBUG:
+                    logger.debug("Tweet не принадлежит пользователю или не найден")
+                media_task.cancel()
+                return False
+        tasks: list[Coroutine[Any, Any, Any]] = [self.async_session.commit()]
+        medias_res = media_task.result()
+        for media in medias_res.scalars().all():
+            media_path = os.path.join(path, f"{media.id}.{media.file_type}")
             tasks.append(aiofiles.os.remove(media_path))
         await asyncio.gather(*tasks)
         logger.info("Tweet удален")
@@ -330,7 +327,7 @@ class CrudController:
         :return: True, если лайк поставлен, иначе False.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
+            logger.debug("user_id=%s, tweet_id=%s", user_id, tweet_id)
         like = Like(user_id=user_id, tweet_id=tweet_id)
         self.async_session.add(like)
         try:
@@ -354,7 +351,7 @@ class CrudController:
         :return: True, если лайк удален, иначе False.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, tweet_id={tweet_id}")
+            logger.debug("user_id=%s, tweet_id=%s", user_id, tweet_id)
         query = delete(Like).filter(
             Like.user_id == user_id, Like.tweet_id == tweet_id
         )
@@ -368,9 +365,9 @@ class CrudController:
         return result
 
     async def get_tweets_info(
-        self,
-        user_id: int | Column[int],
-        media_url: URL,
+            self,
+            user_id: int | Column[int],
+            media_url: URL,
     ) -> list[dict[str, Any]]:
         """
         Возвращает информацию о твитах, на которые подписан пользователь.
@@ -379,53 +376,88 @@ class CrudController:
         :param media_url: Базовый URL API.
         """
         if DEBUG:
-            logger.debug(f"user_id={user_id}, base_url={media_url}")
+            logger.debug("user_id=%s, media_url=%s", user_id, media_url)
+        sub_query = select(Subscribe).filter(
+            or_(
+                Subscribe.follower_id == user_id,
+                Subscribe.author_id == user_id
+            )
+        ).subquery()
         tweet_query = (
             select(Tweet)
             .join(
-                Subscribe, Tweet.author_id == Subscribe.author_id, isouter=True
+                sub_query, Tweet.author_id == sub_query.c.author_id, isouter=True
             )
             .join(Like, Tweet.id == Like.tweet_id, isouter=True)
             .filter(
                 or_(
-                    Subscribe.follower_id == user_id,
+                    sub_query.c.follower_id == user_id,
                     Tweet.author_id == user_id,
                 )
             )
             .group_by(Tweet.id, Tweet.author_id, Tweet.content)
             .order_by(desc(count(Tweet.likes)))
         )
-        result_tweets_task = asyncio.create_task(
-            self.async_session.execute(tweet_query)
-        )
-        result = []
-        result_tweets = await result_tweets_task
+        result_tweets = await self.async_session.execute(tweet_query)
         tweets = result_tweets.scalars().all()
+        result = []
         if DEBUG:
-            logger.debug(f"Получен список твитов: {tweets}")
+            logger.debug("Получен список твитов: %s", tweets)
+        authors: dict[Any, User | None] = {}
+        medias: dict[Any, list[Media]] = {}
+        likes: dict[Any, list[Like] | list[dict[str, Any]]] = {}
+        async with asyncio.TaskGroup() as tg:
+            for tweet in tweets:
+                tweet_id = tweet.id
+                media_task = tg.create_task(tweet.awaitable_attrs.medias)  # type: ignore
+                author_task = tg.create_task(tweet.awaitable_attrs.author)  # type: ignore
+                likes_task = tg.create_task(tweet.awaitable_attrs.likes)  # type: ignore
+                media_task.add_done_callback(self.__tweet_callback(medias, tweet_id))
+                author_task.add_done_callback(self.__tweet_callback(authors, tweet_id))
+                likes_task.add_done_callback(self.__tweet_callback(likes, tweet_id))
+        likes = await self._like_handler(likes)
         for tweet in tweets:
-            media_task = asyncio.create_task(tweet.awaitable_attrs.medias)  # type: ignore
-            author_task = asyncio.create_task(tweet.awaitable_attrs.author)  # type: ignore
-            likes_task = asyncio.create_task(tweet.awaitable_attrs.likes)  # type: ignore
+            tweet_id = tweet.id
             res = tweet.to_dict()
             res["attachments"] = [
                 (f"{media_url.scheme}://{media_url.hostname}:"
-                 f"{SETTINGS.port}/{media_url.path}/{media.id}"
+                 f"{SETTINGS.port}{media_url.path}/{media.id}"
                  f".{media.file_type}")
-                for media in await media_task
+                for media in medias.pop(tweet_id, [])
             ]
-            res["author"] = await author_task
-
-            likes_data = []
-            for like in await likes_task:
-                user_task = asyncio.create_task(like.awaitable_attrs.user)  # type: ignore
-                like_data = like.to_dict()
-                user = await user_task
-                like_data["name"] = user.name
-                likes_data.append(like_data)
-
-            res["likes"] = likes_data
+            res["author"] = authors.pop(tweet_id, None)
+            res["likes"] = likes.pop(tweet_id, [])
             result.append(res)
         if DEBUG:
-            logger.debug(f"Функция вернула: {result}")
+            logger.debug("Функция вернула: %s", result)
         return result
+
+    @classmethod
+    async def _like_handler(cls, likes_collection: dict[Any, list[Like]]) -> dict[Any, list[dict[str, Any]]]:
+        result: dict[Any, list[dict[str, Any]]] = defaultdict(list)
+        async with asyncio.TaskGroup() as tg:
+            for tweet_id, likes in likes_collection.items():
+                for like in likes:
+                    like_data = like.to_dict()
+                    result[tweet_id].append(like_data)
+                    user_task = tg.create_task(like.awaitable_attrs.user)
+                    user_task.add_done_callback(cls.__like_callback(like_data))
+        return result
+
+    @staticmethod
+    def __like_callback(like_data: dict) -> Callable:
+        def _callback(task: asyncio.Task):
+            result = task.result()
+            like_data.update({"name": result.name})
+
+        return _callback
+
+    @staticmethod
+    def __tweet_callback(collect: dict, tweet_id: Any):
+        def _callback(t: asyncio.Task):
+            result = t.result()
+            collect.update({tweet_id: result})
+        return _callback
+
+
+

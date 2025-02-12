@@ -236,7 +236,7 @@ def check_file(file: UploadFile) -> UploadFile:
     :raise HTTPException: Выбрасывает, если файл не прошел валидацию.
     """
     if DEBUG:
-        logger.debug(f"file={file}")
+        logger.debug("file=%s", file)
     details = []
     detail: dict[str, list | str] = {
         "loc": ["body", "file"],

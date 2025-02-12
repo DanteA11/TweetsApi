@@ -84,7 +84,7 @@ class TweetIn(BaseModel):
     """
 
     tweet_data: str
-    tweet_media_ids: list[int] = []
+    tweet_media_ids: list[int]
 
 
 class TweetOut(BaseId):
@@ -92,7 +92,7 @@ class TweetOut(BaseId):
     Схема исходящего твита.
 
     :arg content: Текст твита.
-    :arg attachments: Ссылки на вложения. # TODO Уточнить.
+    :arg attachments: Ссылки на вложения.
     :arg author: Автор твита.
     :arg likes: Список лайков.
     """

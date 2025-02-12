@@ -28,7 +28,7 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 4G
+          memory: 2G
     networks:
       - postgres
 
@@ -37,7 +37,8 @@ services:
       context: src
     container_name: ${APP_CONTAINER_NAME}
     depends_on:
-      - ${POSTGRES_HOSTNAME}
+      postgres:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+psycopg_async://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOSTNAME}/${POSTGRES_DB}
       - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE}
@@ -46,9 +47,13 @@ services:
       - LOG_LEVEL=${LOG_LEVEL}
       - PORT=${PORT}
     stop_signal: SIGKILL
-    restart: on-failure
     ports:
       - ${PORT}:80
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: 2G
     networks:
       - postgres
     volumes:
